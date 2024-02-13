@@ -1,0 +1,101 @@
+---
+- name: Apply security best practices to the server
+  hosts: all
+  become: yes
+  vars:
+    ssh_port: 22  # you desire port
+    allowed_ips: ['192.168.1.1']  # with your allowed ip address
+
+  tasks:
+    - name: Harden SSH configuration
+      block:
+        - name: Ensure SSH is installed
+          package:
+            name: openssh-server
+            state: present
+        
+        - name: Disable root SSH login
+          lineinfile:
+            dest: /etc/ssh/sshd_config
+            regexp: '^PermitRootLogin'
+            line: 'PermitRootLogin no'
+            state: present
+        
+        - name: Disable password authentication
+          lineinfile:
+            dest: /etc/ssh/sshd_config
+            regexp: '^PasswordAuthentication'
+            line: 'PasswordAuthentication no'
+            state: present
+        
+        - name: Change default SSH port
+          lineinfile:
+            dest: /etc/ssh/sshd_config
+            regexp: '^#?Port'
+            line: 'Port {{ ssh_port }}'
+            state: present
+        
+        - name: Restart SSH
+          service:
+            name: sshd
+            state: restarted
+      notify: restart sshd
+
+    - name: Set up UFW firewall
+      block:
+        - name: Install UFW
+          package:
+            name: ufw
+            state: present
+        
+        - name: Allow SSH port
+          ufw:
+            rule: allow
+            port: "{{ ssh_port }}"
+            proto: tcp
+        
+        - name: Allow traffic from specific IP addresses
+          ufw:
+            rule: allow
+            src: "{{ item }}"
+          loop: "{{ allowed_ips }}"
+        
+        - name: Enable UFW
+          ufw:
+            state: enabled
+            policy: deny
+            direction: incoming
+
+    - name: Install and configure fail2ban
+      block:
+        - name: Install fail2ban
+          package:
+            name: fail2ban
+            state: present
+        
+        - name: Copy jail.local configuration
+          template:
+            src: jail.local.j2
+            dest: /etc/fail2ban/jail.local
+            owner: root
+            group: root
+            mode: '0644'
+          notify: restart fail2ban
+        
+        - name: Start fail2ban service
+          service:
+            name: fail2ban
+            state: started
+            enabled: yes
+      notify: restart fail2ban
+
+  handlers:
+    - name: restart sshd
+      service:
+        name: sshd
+        state: restarted
+    
+    - name: restart fail2ban
+      service:
+        name: fail2ban
+        state: restarted
