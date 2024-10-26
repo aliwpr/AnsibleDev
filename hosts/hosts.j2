@@ -1,0 +1,17 @@
+this report is at {{ ansible_date_time.time }} on {{ ansible_date_time.date }}
+  
+these hosts is in unreachable mode
+{% for host in ansible_play_hosts_all %}
+{% if host not in ansible_play_hosts %}
+{{ host }}
+{% endif  %}
+{% endfor %}
+
+these hosts not rebooted today 
+{% for host in ansible_play_hosts_all %}
+{% if hostvars[host].uptime is defined %}
+{% if 'day' in hostvars[host].uptime.stdout %}
+ {{ hostvars[host].ansible_hostname }} - has not rebooted today
+{% endif %}
+{% endif %}
+{% endfor %}
